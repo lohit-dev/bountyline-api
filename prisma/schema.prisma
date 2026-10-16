@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Bountyline schema. Mirrors src/domain.ts.
+// GitHub comment ids are larger than 2^31, so they are BigInt here and Number in the app.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,204 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum BountyStatus {
+  created
+  funded
+  claimed
+  reviewed
+  flagged
+  window
+  paid
+  vetoed
+  cancelled
+  expired
+  refunded
+}
+
+enum SubmissionStatus {
+  open
+  merged
+  superseded
+  closed
+}
+
+enum PayoutState {
+  scheduled
+  sending
+  sent
+  failed
+}
+
+enum RefundState {
+  pending
+  sent
+  failed
+}
+
+enum JobState {
+  pending
+  running
+  done
+  failed
+}
+
+model Repo {
+  id             Int      @id // GitHub repository id
+  owner          String
+  name           String
+  installationId Int
+  settings       Json
+  createdAt      DateTime @default(now())
+
+  bounties Bounty[]
+}
+
+model Bounty {
+  id               String       @id
+  repoId           Int
+  repo             Repo         @relation(fields: [repoId], references: [id])
+  issueNumber      Int
+  amountCents      Int
+  currency         String       @default("USD")
+  status           BountyStatus
+  funderGithubId   Int
+  funderLogin      String
+  fundToken        String       @unique
+  paypalOrderId    String?
+  paypalCaptureId  String?
+  submissionId     String?
+  issueCommentId   BigInt?
+  fundedAt         DateTime?
+  expiresAt        DateTime?
+  windowEndsAt     DateTime?
+  createdAt        DateTime     @default(now())
+  /// "<repoId>:<issueNumber>" while the bounty is live, NULL once it ended.
+  /// The unique index is what guarantees one live bounty per issue.
+  activeKey        String?      @unique
+
+  submissions Submission[]
+  payout      Payout?
+  refund      Refund?
+  events      BountyEvent[]
+
+  @@index([status])
+  @@index([repoId, issueNumber])
+  @@index([funderGithubId])
+}
+
+model Submission {
+  id             String           @id
+  bountyId       String
+  bounty         Bounty           @relation(fields: [bountyId], references: [id])
+  repoId         Int
+  prNumber       Int
+  authorGithubId Int
+  authorLogin    String
+  headSha        String
+  status         SubmissionStatus
+  mergedAt       DateTime?
+  commentId      BigInt?
+  createdAt      DateTime         @default(now())
+
+  reviews Review[]
+
+  @@unique([bountyId, prNumber])
+  @@index([repoId, prNumber])
+  @@index([authorGithubId])
+}
+
+model Review {
+  id             String     @id
+  submissionId   String
+  submission     Submission @relation(fields: [submissionId], references: [id])
+  headSha        String
+  score          Int
+  rubric         Json
+  summary        String
+  redFlags       Json
+  recommendation String
+  ci             String
+  passed         Boolean
+  model          String
+  createdAt      DateTime   @default(now())
+
+  @@index([submissionId])
+}
+
+model Payout {
+  id                String      @id
+  bountyId          String      @unique
+  bounty            Bounty      @relation(fields: [bountyId], references: [id])
+  recipientGithubId Int
+  amountCents       Int
+  state             PayoutState
+  idempotencyKey    String      @unique
+  paypalBatchId     String?
+  attempts          Int         @default(0)
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime    @default(now())
+}
+
+model Refund {
+  id             String      @id
+  bountyId       String      @unique
+  bounty         Bounty      @relation(fields: [bountyId], references: [id])
+  amountCents    Int
+  reason         String
+  state          RefundState
+  idempotencyKey String      @unique
+  paypalRefundId String?
+  attempts       Int         @default(0)
+  lastError      String?
+  createdAt      DateTime    @default(now())
+}
+
+model BountyEvent {
+  id        String   @id
+  bountyId  String
+  bounty    Bounty   @relation(fields: [bountyId], references: [id])
+  type      String
+  actor     String
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([bountyId, createdAt])
+}
+
+model Picker {
+  id                String   @id
+  repoId            Int
+  issueNumber       Int
+  commentId         BigInt?
+  optionsCents      Json
+  createdByGithubId Int
+  state             String   @default("open")
+  createdAt         DateTime @default(now())
+}
+
+model PayoutAccount {
+  githubUserId  Int      @id
+  githubLogin   String
+  /// AES-256-GCM, see src/core/crypto.ts
+  paypalEmailEnc String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Job {
+  id        String   @id
+  kind      String
+  key       String   @unique
+  payload   Json
+  runAt     DateTime
+  attempts  Int      @default(0)
+  state     JobState @default(pending)
+  lastError String?
+  lockedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([state, runAt])
 }
