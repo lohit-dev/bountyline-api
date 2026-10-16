@@ -62,7 +62,7 @@ export type Review = {
   createdAt: Date;
 };
 
-export type PayoutState = "scheduled" | "sent" | "failed";
+export type PayoutState = "scheduled" | "sending" | "sent" | "failed";
 export type Payout = {
   id: string;
   bountyId: string;

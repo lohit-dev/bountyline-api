@@ -74,8 +74,8 @@ export interface Store {
   savePayoutAccount(a: PayoutAccount): Promise<void>;
 
   /**
-   * Adds a job. If the key exists: do nothing and return false, unless
-   * `replace` is set and the job is still pending (then its time is updated).
+   * Adds a job. If the key exists: do nothing and return false, unless `replace`
+   * is set and the job is not running right now (then it is rescheduled and reset).
    */
   enqueue(job: { kind: JobKind; key: string; payload?: Record<string, unknown>; runAt: Date }, opts?: { replace?: boolean }): Promise<boolean>;
   /** Claims due jobs (marks them running). */

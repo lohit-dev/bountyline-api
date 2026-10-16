@@ -188,7 +188,10 @@ export class MemoryStore implements Store {
   async enqueue(job: { kind: JobKind; key: string; payload?: Record<string, unknown>; runAt: Date }, opts: { replace?: boolean } = {}) {
     const existing = this.jobs.get(job.key);
     if (existing) {
-      if (opts.replace && existing.state === "pending") {
+      if (opts.replace && existing.state !== "running") {
+        existing.state = "pending";
+        existing.attempts = 0;
+        existing.lastError = null;
         existing.runAt = job.runAt;
         existing.payload = job.payload ?? existing.payload;
         return true;
