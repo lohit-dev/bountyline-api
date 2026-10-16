@@ -1,1 +1,3 @@
-console.log("Hello via Bun!");
+import server from "./src/main";
+
+export default server;

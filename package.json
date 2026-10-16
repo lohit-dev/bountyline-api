@@ -1,5 +1,5 @@
 {
-  "name": "api",
+  "name": "bountyline-api",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -11,13 +11,17 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.134.0",
-    "@octokit/app": "^16.1.4",
-    "@octokit/rest": "^22.0.1",
-    "@octokit/webhooks": "^14.2.0",
     "@prisma/client": "7.10.0",
     "hono": "^4.13.13",
-    "pg-boss": "^12.38.0",
-    "zod": "^4.6.7"
+    "@prisma/adapter-pg": "7.10.0"
+  },
+  "scripts": {
+    "dev": "bun --watch index.ts",
+    "start": "bun index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "bunx --bun prisma generate",
+    "db:migrate": "bunx --bun prisma migrate dev",
+    "db:deploy": "bunx --bun prisma migrate deploy"
   }
 }
