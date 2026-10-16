@@ -11,9 +11,14 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.81",
+    "@ai-sdk/google": "^4.0.98",
+    "@ai-sdk/openai": "^4.0.95",
+    "@ai-sdk/xai": "^5.0.23",
+    "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
-    "hono": "^4.13.13",
-    "@prisma/adapter-pg": "7.10.0"
+    "ai": "^7.0.142",
+    "hono": "^4.13.13"
   },
   "scripts": {
     "dev": "bun --watch index.ts",
