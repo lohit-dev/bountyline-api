@@ -8,7 +8,8 @@ import { randomToken } from "./core/crypto";
 import { loadEnv } from "./env";
 import { createApp } from "./http/app";
 import { Api } from "./http/handlers";
-import { AiReviewer, anthropicComplete } from "./review/reviewer";
+import { buildComplete } from "./review/providers";
+import { AiReviewer } from "./review/reviewer";
 import type { Deps } from "./services/context";
 import { runDueJobs, scheduleSweep } from "./services/jobs";
 
@@ -19,7 +20,7 @@ const deps: Deps = {
   store: new PrismaStore(db),
   github: new GitHubClient({ appId: env.githubAppId, privateKey: env.githubPrivateKey }),
   paypal: new PayPalClient({ clientId: env.paypalClientId, secret: env.paypalSecret, env: env.paypalEnv }),
-  reviewer: new AiReviewer(anthropicComplete({ apiKey: env.anthropicApiKey, model: env.reviewModel }), env.reviewModel),
+  reviewer: new AiReviewer(buildComplete({ provider: env.reviewProvider, model: env.reviewModel, apiKey: env.reviewApiKey }), `${env.reviewProvider}/${env.reviewModel}`),
   clock: { now: () => new Date() },
   config: { appSlug: env.appSlug, apiUrl: env.apiUrl, dashboardUrl: env.dashboardUrl, encryptionKey: env.encryptionKey, pickerOptionsCents: env.pickerOptionsCents },
   newId: () => crypto.randomUUID(),

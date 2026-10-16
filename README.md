@@ -2,7 +2,7 @@
 
 Bountyline's backend: a GitHub App webhook receiver, the bounty state machine, PayPal funding and payouts, the AI review pipeline, a small job queue, and the JSON API the dashboard uses.
 
-Stack: Bun, Hono, Prisma 7 on Postgres. GitHub, PayPal and Anthropic are called with plain `fetch`, no SDKs.
+Stack: Bun, Hono, Prisma 7 on Postgres. GitHub and PayPal are called with plain `fetch`. The AI review uses the Vercel AI SDK, so the provider (Anthropic, OpenAI, Google Gemini or xAI Grok) is a config choice.
 
 ## How a bounty works
 
@@ -33,6 +33,7 @@ The services only depend on the interfaces in `src/ports.ts`, which is how the w
 
 ```sh
 bun install
+bun add ai @ai-sdk/anthropic @ai-sdk/openai @ai-sdk/google @ai-sdk/xai   # once
 cp .env.example .env          # fill it in, see below
 bun run db:generate           # generates ./generated/prisma
 bun run db:migrate            # first time: creates prisma/migrations (commit them)
@@ -51,6 +52,10 @@ Create it at Settings > Developer settings > GitHub Apps.
 - Permissions: Issues (read and write), Pull requests (read and write), Checks (read and write), Metadata (read).
 - Subscribe to events: Issue comment, Pull request, Check run, Issues, plus the installation events.
 - Generate a private key and put it in `GITHUB_PRIVATE_KEY` on one line with `\n` between lines.
+
+### AI provider
+
+Set `REVIEW_PROVIDER` (`anthropic`, `openai`, `google` or `xai`), `REVIEW_MODEL` and that provider's key. Only the chosen provider's key is needed. Models differ in how well they follow the review rubric and return JSON, so compare a few on real pull requests before the demo. To add another provider, add it to `src/review/provider-config.ts` and `src/review/providers.ts`.
 
 ### PayPal
 

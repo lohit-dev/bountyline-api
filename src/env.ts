@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL, KEY_ENV, PROVIDERS, isProvider, type Provider } from "./review/provider-config";
+
 /** Reads and checks environment variables once at startup, so a typo fails loudly and early. */
 export type Env = {
   port: number;
@@ -15,8 +17,9 @@ export type Env = {
   paypalClientId: string;
   paypalSecret: string;
   paypalEnv: "sandbox" | "live";
-  anthropicApiKey: string;
+  reviewProvider: Provider;
   reviewModel: string;
+  reviewApiKey: string;
   pickerOptionsCents: number[];
 };
 
@@ -35,6 +38,12 @@ export function loadEnv(e: Record<string, string | undefined> = process.env): En
   if (sessionSecret && sessionSecret.length < 32) problems.push("SESSION_SECRET must be at least 32 characters");
   const paypalEnv = (e["PAYPAL_ENV"] ?? "sandbox") as string;
   if (paypalEnv !== "sandbox" && paypalEnv !== "live") problems.push('PAYPAL_ENV must be "sandbox" or "live"');
+
+  const providerName = (e["REVIEW_PROVIDER"] ?? "anthropic").trim().toLowerCase();
+  if (!isProvider(providerName)) problems.push(`REVIEW_PROVIDER must be one of: ${PROVIDERS.join(", ")}`);
+  const reviewProvider: Provider = isProvider(providerName) ? providerName : "anthropic";
+  const reviewModel = e["REVIEW_MODEL"]?.trim() || DEFAULT_MODEL[reviewProvider] || "";
+  if (!reviewModel) problems.push(`REVIEW_MODEL is missing (required for ${reviewProvider})`);
 
   const picker = (e["PICKER_AMOUNTS_USD"] ?? "25,50,100,250").split(",").map((s) => Math.round(Number(s.trim()) * 100));
   if (picker.some((c) => !Number.isFinite(c) || c <= 0)) problems.push("PICKER_AMOUNTS_USD must be a comma separated list of numbers");
@@ -56,8 +65,9 @@ export function loadEnv(e: Record<string, string | undefined> = process.env): En
     paypalClientId: need("PAYPAL_CLIENT_ID"),
     paypalSecret: need("PAYPAL_SECRET"),
     paypalEnv: paypalEnv === "live" ? "live" : "sandbox",
-    anthropicApiKey: need("ANTHROPIC_API_KEY"),
-    reviewModel: e["REVIEW_MODEL"]?.trim() || "claude-sonnet-4-5",
+    reviewProvider,
+    reviewModel,
+    reviewApiKey: need(KEY_ENV[reviewProvider]),
     pickerOptionsCents: picker,
   };
   if (problems.length) throw new Error(`Bad configuration:\n- ${problems.join("\n- ")}`);
