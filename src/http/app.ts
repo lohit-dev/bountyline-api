@@ -21,6 +21,7 @@ export function createApp(api: Api, dashboardUrl: string) {
 
   app.get("/api/me", (c) => api.me(c.req.raw));
   app.get("/api/bounties", (c) => api.bounties(c.req.raw));
+  app.get("/api/activity", (c) => api.activity(c.req.raw));
   app.get("/api/bounties/:id", (c) => api.bounty(c.req.raw, c.req.param("id")));
   app.post("/api/bounties/:id/approve", (c) => api.decision(c.req.raw, c.req.param("id"), "approve"));
   app.post("/api/bounties/:id/veto", (c) => api.decision(c.req.raw, c.req.param("id"), "veto"));

@@ -203,3 +203,32 @@ describe("dashboard API", () => {
     expect(me.payout).toEqual({ set: true, masked: "m***@example.com" });
   });
 });
+
+describe("dashboard API extras", () => {
+  test("detail carries the rubric, repo settings and whether an address is saved, never the address", async () => {
+    const s = await fundedWorld();
+    await toWindow(s);
+    const read = async () => (await (await s.api.bounty(s.as(MAINT, "/x"), s.id)).json()) as any;
+    let d = await read();
+    expect(Object.keys(d.review.rubric).sort()).toEqual(["quality", "red_flags", "scope", "solves_issue", "tests_ci"]);
+    expect(d.settings).toEqual({ reviewWindowHours: 48, scoreThreshold: 75, expiryDays: 30 });
+    expect(d.payoutAddressSet).toBe(false);
+    await addPayoutAccount(s.w);
+    d = await read();
+    expect(d.payoutAddressSet).toBe(true);
+    expect(JSON.stringify(d)).not.toContain("mira@example.com");
+  });
+  test("activity lists the user's own events, newest first, and nothing for strangers", async () => {
+    const s = await fundedWorld();
+    await toWindow(s);
+    const mine = ((await (await s.api.activity(s.as(MIRA, "/api/activity"))).json()) as any).activity;
+    expect(mine.length).toBeGreaterThan(3);
+    const times = mine.map((a: any) => a.createdAt);
+    expect([...times].sort().reverse()).toEqual(times);
+    expect(mine[0]).toMatchObject({ repo: "acme/widgets", issueNumber: 5 });
+    expect(Object.keys(mine[0]).sort()).toEqual(["actor", "bountyId", "createdAt", "issueNumber", "repo", "type"]);
+    const none = ((await (await s.api.activity(s.as({ id: 77, login: "rando" }, "/x"))).json()) as any).activity;
+    expect(none).toEqual([]);
+    expect((await s.api.activity(new Request("https://api.test/api/activity"))).status).toBe(401);
+  });
+});

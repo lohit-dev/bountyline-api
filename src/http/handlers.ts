@@ -5,7 +5,7 @@
 import { signToken, verifyToken } from "../core/crypto";
 import { verifyWebhookSignature } from "../adapters/github";
 import type { Deps } from "../services/context";
-import { decide, getBountyDetail, getPayoutAddress, listBounties, setPayoutAddress, type Viewer } from "../services/dashboard";
+import { decide, getBountyDetail, listActivity, getPayoutAddress, listBounties, setPayoutAddress, type Viewer } from "../services/dashboard";
 import { completeFunding, FundingError, startFunding } from "../services/funding";
 
 export type HttpConfig = {
@@ -182,6 +182,12 @@ export class Api {
     const v = this.auth(req);
     if (v instanceof Response) return v;
     return json({ bounties: await listBounties(this.d, v) });
+  }
+  async activity(req: Request): Promise<Response> {
+    const v = this.auth(req);
+    if (v instanceof Response) return v;
+    const limit = Number(new URL(req.url).searchParams.get("limit") ?? 20);
+    return json({ activity: await listActivity(this.d, v, Number.isFinite(limit) ? limit : 20) });
   }
   async bounty(req: Request, id: string): Promise<Response> {
     const v = this.auth(req);

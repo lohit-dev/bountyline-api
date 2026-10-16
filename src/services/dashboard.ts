@@ -26,11 +26,18 @@ export type BountyView = {
   windowEndsAt: string | null;
   canDecide: boolean;
   submissions: { prNumber: number; prUrl: string; authorLogin: string; status: string; current: boolean }[];
-  review: { score: number; passed: boolean; recommendation: string; ci: string; summary: string; redFlags: string[]; createdAt: string } | null;
+  review: { score: number; passed: boolean; recommendation: string; ci: string; summary: string; redFlags: string[]; rubric: Record<string, number>; createdAt: string } | null;
   payout: { state: string; sentAt: string | null } | null;
   refund: { state: string; reason: string } | null;
 };
-export type BountyDetail = BountyView & { events: { type: string; actor: string; createdAt: string }[] };
+export type BountyDetail = BountyView & {
+  events: { type: string; actor: string; createdAt: string }[];
+  settings: { reviewWindowHours: number; scoreThreshold: number; expiryDays: number };
+  /** Whether the contributor has saved a payout address. The address itself is never shown to others. */
+  payoutAddressSet: boolean;
+};
+
+export type ActivityItem = { bountyId: string; repo: string; issueNumber: number; type: string; actor: string; createdAt: string };
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
@@ -65,7 +72,7 @@ async function buildView(d: Deps, viewer: Viewer, b: Bounty, repo: Repo, role: B
     windowEndsAt: iso(b.windowEndsAt),
     canDecide: canManage(permission) && (b.status === "window" || b.status === "flagged"),
     submissions: subs.map((s) => ({ prNumber: s.prNumber, prUrl: `https://github.com/${slug}/pull/${s.prNumber}`, authorLogin: s.authorLogin, status: s.status, current: s.id === b.submissionId })),
-    review: review ? { score: review.score, passed: review.passed, recommendation: review.recommendation, ci: review.ci, summary: review.summary, redFlags: review.redFlags, createdAt: review.createdAt.toISOString() } : null,
+    review: review ? { score: review.score, passed: review.passed, recommendation: review.recommendation, ci: review.ci, summary: review.summary, redFlags: review.redFlags, rubric: review.rubric, createdAt: review.createdAt.toISOString() } : null,
     payout: payout ? { state: payout.state, sentAt: iso(payout.sentAt) } : null,
     refund: refund ? { state: refund.state, reason: refund.reason } : null,
   };
@@ -101,7 +108,23 @@ export async function getBountyDetail(d: Deps, viewer: Viewer, id: string): Prom
   if (!role) return null; // same answer as "does not exist", so ids cannot be probed
   const view = await buildView(d, viewer, b, repo, role, permission);
   const events = (await d.store.listEvents(b.id)).map((e) => ({ type: e.type, actor: e.actor, createdAt: e.createdAt.toISOString() }));
-  return { ...view, events };
+  const sub = b.submissionId ? await d.store.getSubmission(b.submissionId) : null;
+  const account = sub ? await d.store.getPayoutAccount(sub.authorGithubId) : null;
+  const { reviewWindowHours, scoreThreshold, expiryDays } = repo.settings;
+  return { ...view, events, settings: { reviewWindowHours, scoreThreshold, expiryDays }, payoutAddressSet: !!account };
+}
+
+/** Latest events across the user's own bounties. Event data is not included, only what happened. */
+export async function listActivity(d: Deps, viewer: Viewer, limit = 20): Promise<ActivityItem[]> {
+  const out: ActivityItem[] = [];
+  for (const b of await d.store.listBountiesForUser(viewer.id)) {
+    const repo = await d.store.getRepo(b.repoId);
+    if (!repo || !(await roleOf(d, viewer, b))) continue;
+    for (const e of await d.store.listEvents(b.id)) {
+      out.push({ bountyId: b.id, repo: `${repo.owner}/${repo.name}`, issueNumber: b.issueNumber, type: e.type, actor: e.actor, createdAt: e.createdAt.toISOString() });
+    }
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, Math.min(Math.max(limit, 1), 50));
 }
 
 export type DecisionResult = { ok: true } | { ok: false; status: 403 | 404 | 409; error: string };
