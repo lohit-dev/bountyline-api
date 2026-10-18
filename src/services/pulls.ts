@@ -146,14 +146,17 @@ async function onClosed(d: Deps, repo: Repo, pr: PullLite, merged: boolean) {
     if (sub.status !== "open") continue;
     const bounty = await d.store.getBounty(sub.bountyId);
     if (!bounty) continue;
-    if (merged) await onMerged(d, bounty, sub);
+    if (merged) await onMerged(d, bounty, sub, pr.headSha);
     else await onClosedUnmerged(d, bounty, sub);
   }
 }
 
-async function onMerged(d: Deps, bounty: Bounty, sub: Submission) {
+async function onMerged(d: Deps, bounty: Bounty, sub: Submission, finalSha: string) {
   const now = d.clock.now();
-  await d.store.saveSubmission({ ...sub, status: "merged", mergedAt: now });
+  // GitHub does not guarantee webhook order: the "merged" event can arrive before the last
+  // "synchronize". The merge event carries the final head commit, so trust it. If it differs
+  // from what was reviewed, the state machine sends the bounty back for a fresh review.
+  await d.store.saveSubmission({ ...sub, headSha: finalSha || sub.headSha, status: "merged", mergedAt: now });
   await logEvent(d, bounty.id, "pr_merged", "github", { pr: sub.prNumber });
   if (!["claimed", "reviewed", "flagged"].includes(bounty.status)) return; // already decided another way
 

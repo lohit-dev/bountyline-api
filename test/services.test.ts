@@ -99,6 +99,23 @@ describe("creating and funding", () => {
   });
 });
 
+describe("webhook ordering", () => {
+  test("a merge that arrives before the last push event is reviewed again, not paid on the old review", async () => {
+    const w = makeWorld();
+    const b = await fundedBounty(w);
+    await openPr(w);
+    await runDueJobs(w.d);
+    expect(await status(w, b.id)).toBe("reviewed");
+    // The merge event reports a newer head commit than the one that was reviewed.
+    w.gh.pulls.get(7)!.headSha = "sha7b";
+    await hook(w, "pull_request", prPayload({ action: "closed", number: 7, merged: true, sha: "sha7b" }));
+    expect(await status(w, b.id)).toBe("claimed");
+    await runDueJobs(w.d);
+    expect(w.reviewer.calls).toBe(2);
+    expect(await status(w, b.id)).toBe("window");
+  });
+});
+
 describe("the happy path to a payout", () => {
   test("fund, claim, review, merge, wait out the window, get paid exactly once", async () => {
     const w = makeWorld();
