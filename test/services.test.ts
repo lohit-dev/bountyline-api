@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { decrypt } from "../src/core/crypto";
 import { completeFunding, startFunding, FundingError } from "../src/services/funding";
 import { runDueJobs, routeWebhook } from "../src/services/jobs";
+import { decide } from "../src/services/dashboard";
+import { applyEvent } from "../src/services/lifecycle";
 import { runSweep } from "../src/services/sweeper";
 import { INSTALL, MAINT, MIRA, REPO, KEY, addPayoutAccount, commentPayload, makeWorld, prPayload, type World } from "./world";
 
@@ -96,6 +98,47 @@ describe("creating and funding", () => {
     expect(approveUrl).toBeTruthy();
     await completeFunding(w.d, b0.fundToken, (await w.store.getBounty(b0.id))!.paypalOrderId!, MAINT);
     expect(await status(w, b0.id)).toBe("claimed");
+  });
+});
+
+describe("hardening", () => {
+  test("a pull request author with write access cannot approve their own payout", async () => {
+    const w = makeWorld();
+    w.gh.permissions.set("mira", "write");
+    w.reviewer.score = 60;
+    const b = await fundedBounty(w);
+    await openPr(w);
+    await runDueJobs(w.d);
+    await merge(w);
+    expect(await status(w, b.id)).toBe("flagged");
+    await hook(w, "issue_comment", commentPayload({ issue: 7, pull: true, body: "/approve-bounty", sender: MIRA }));
+    expect(await status(w, b.id)).toBe("flagged");
+    expect(w.gh.commentsOn(7).join("\n")).toContain("someone else needs to approve");
+    const r = await decide(w.d, MIRA, b.id, "approve");
+    expect(r.ok).toBe(false);
+    expect(await status(w, b.id)).toBe("flagged");
+    // A different maintainer still can.
+    expect((await decide(w.d, MAINT, b.id, "approve")).ok).toBe(true);
+    expect(await status(w, b.id)).toBe("window");
+  });
+
+  test("a payment captured after the bounty was cancelled is refunded, not lost", async () => {
+    const w = makeWorld();
+    await hook(w, "issue_comment", commentPayload({ body: "/bounty 150", sender: MAINT }));
+    const created = (await w.store.findActiveBountyByIssue(1, 5))!;
+    await startFunding(w.d, created.fundToken, MAINT);
+    const order = (await w.store.getBounty(created.id))!.paypalOrderId!;
+    // The unfunded sweep cancels the bounty while the money is being captured.
+    const capture = w.pp.captureOrder.bind(w.pp);
+    w.pp.captureOrder = async (...a: Parameters<typeof capture>) => {
+      const r = await capture(...a);
+      await applyEvent(w.d, created.id, "CANCEL", "system");
+      return r;
+    };
+    await expect(completeFunding(w.d, created.fundToken, order, MAINT)).rejects.toBeInstanceOf(FundingError);
+    await runDueJobs(w.d);
+    expect(w.pp.refunds.length).toBe(1);
+    expect(await status(w, created.id)).toBe("refunded");
   });
 });
 

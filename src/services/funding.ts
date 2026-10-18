@@ -1,5 +1,6 @@
 /** Paying for a bounty. The funder signs in on our site, then pays through PayPal. */
 import { addDays } from "../core/rules";
+import { IllegalTransitionError } from "../core/state";
 import type { Bounty } from "../domain";
 import type { Deps } from "./context";
 import { applyEvent } from "./lifecycle";
@@ -54,9 +55,21 @@ export async function completeFunding(d: Deps, token: string, orderId: string, u
 
   const repo = await d.store.getRepo(bounty.repoId);
   const now = d.clock.now();
-  const { bounty: funded } = await applyEvent(d, bounty.id, "FUNDED", user.login, {
-    patch: { paypalCaptureId: capture.captureId, fundedAt: now, expiresAt: addDays(now, repo?.settings.expiryDays ?? 30) },
-  });
+  let funded: Bounty;
+  try {
+    ({ bounty: funded } = await applyEvent(d, bounty.id, "FUNDED", user.login, {
+      patch: { paypalCaptureId: capture.captureId, fundedAt: now, expiresAt: addDays(now, repo?.settings.expiryDays ?? 30) },
+    }));
+  } catch (err) {
+    // The bounty was closed (for example cancelled as unfunded) while the funder was on PayPal.
+    // The money is already captured, so keep the capture id and refund it.
+    if (err instanceof IllegalTransitionError) {
+      await d.store.updateBounty(bounty.id, { paypalCaptureId: capture.captureId });
+      await d.store.enqueue({ kind: "refund", key: `refund:${bounty.id}`, payload: { bountyId: bounty.id }, runAt: now });
+      throw new FundingError("wrong_state", "This bounty was closed before the payment finished. The payment is being refunded automatically.");
+    }
+    throw err;
+  }
   await linkOpenPulls(d, funded);
   return (await d.store.getBounty(funded.id)) ?? funded;
 }

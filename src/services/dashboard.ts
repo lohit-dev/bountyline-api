@@ -143,6 +143,10 @@ export async function decide(d: Deps, viewer: Viewer, id: string, action: "appro
     return { ok: false, status: 409, error: "The payout has already been sent and payouts are final." };
   }
   if (b.status !== "window" && b.status !== "flagged") return { ok: false, status: 409, error: "There is nothing to decide on right now." };
+  if (action === "approve") {
+    const current = b.submissionId ? await d.store.getSubmission(b.submissionId) : null;
+    if (current && current.authorGithubId === viewer.id) return { ok: false, status: 403, error: "You wrote this pull request, so someone else needs to approve its payout." };
+  }
   try {
     await applyEvent(d, b.id, action === "approve" ? "APPROVE" : "VETO", viewer.login);
   } catch (err) {

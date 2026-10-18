@@ -220,6 +220,7 @@ export const replies = {
   nothingToVeto: "There is nothing to veto yet. A payout is scheduled after the pull request is merged.",
   alreadyPaid: "The payout has already been sent and payouts are final, so it cannot be undone.",
   nothingToApprove: "There is nothing to approve right now.",
+  cannotApproveOwn: "You wrote this pull request, so someone else needs to approve its payout.",
   needsMergeFirst: "The pull request must be merged before the bounty can be paid.",
   funderCannotClaim: (login: string) => `@${login} funded this bounty, so a pull request from them cannot claim it.`,
   notFunder: "Only the person who funded this bounty (or a maintainer) can cancel it.",

@@ -179,6 +179,9 @@ export async function approveBounty(d: Deps, repo: Repo, number: number, isPull:
   if (!bounty) return void (await reply(d, repo, number, replies.noBounty));
   if (bounty.status === "paid") return void (await reply(d, repo, number, replies.alreadyPaid));
   if (bounty.status !== "window" && bounty.status !== "flagged") return void (await reply(d, repo, number, replies.nothingToApprove));
+  // Nobody approves the payout for their own pull request.
+  const current = bounty.submissionId ? await d.store.getSubmission(bounty.submissionId) : null;
+  if (current && current.authorGithubId === actor.id) return void (await reply(d, repo, number, replies.cannotApproveOwn));
   await tryApply(d, repo, number, bounty.id, "APPROVE", actor.login);
 }
 
